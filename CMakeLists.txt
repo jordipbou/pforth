@@ -37,6 +37,8 @@ if(WIN32)
     message("Warning: _CRT_SECURE_NO_WARNINGS")
 endif(WIN32)
 
+include_directories(${PROJECT_NAME}_lib_sd ${CMAKE_BINARY_DIR}/csrc)
+
 add_subdirectory(csrc)
 if(NOT WIN32 AND NOT APPLE)
 	link_libraries(rt pthread)
@@ -54,13 +56,17 @@ endif(UNISTD)
 
 # 1. Build pforth executable
 add_executable(pforth csrc/pf_main.c)
-target_link_libraries(pforth ${PROJECT_NAME}_lib m)
+if(WIN32)
+	target_link_libraries(pforth ${PROJECT_NAME}_lib)
+else()
+	target_link_libraries(pforth ${PROJECT_NAME}_lib m)
+endif(WIN32)
 
 # 2. Build pforth.dic by compiling system.fth
 set(PFORTH_DIC "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pforth.dic")
 add_custom_command(OUTPUT ${PFORTH_DIC}
-  COMMAND ./pforth -i system.fth
-  WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+  COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pforth -i system.fth
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/fth
   DEPENDS pforth
   COMMENT Building pforth.dic
   VERBATIM
@@ -70,20 +76,35 @@ add_custom_target(pforth_dic DEPENDS ${PFORTH_DIC})
 # 3. Create a pfdicdat.h header containing a precompiled dictionary
 #    as C source code.
 set(PFORTH_DIC_HEADER "csrc/pfdicdat.h")
-add_custom_command(OUTPUT ${PFORTH_DIC_HEADER}
-  COMMAND ./pforth mkdicdat.fth
-  COMMAND mv pfdicdat.h ../csrc/.
-  WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-  DEPENDS pforth_dic
-  COMMENT Building pfdicdat.h
-  VERBATIM
-  )
+if(WIN32)
+	add_custom_command(OUTPUT ${PFORTH_DIC_HEADER}
+	  COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pforth mkdicdat.fth
+	  COMMAND move pfdicdat.h ${CMAKE_BINARY_DIR}/csrc/.
+	  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/fth
+	  DEPENDS pforth_dic
+	  COMMENT Building pfdicdat.h
+	  VERBATIM
+	  )
+else()
+	add_custom_command(OUTPUT ${PFORTH_DIC_HEADER}
+	  COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pforth mkdicdat.fth
+	  COMMAND mv pfdicdat.h ${CMAKE_BINARY_DIR}/csrc/.
+	  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/fth
+	  DEPENDS pforth_dic
+	  COMMENT Building pfdicdat.h
+	  VERBATIM
+	  )
+endif(WIN32)
 add_custom_target(pforth_dic_header DEPENDS ${PFORTH_DIC_HEADER})
 add_dependencies(${PROJECT_NAME}_lib_sd pforth_dic_header)
 
 # 4. Build pforth_standalone using the precompiled dictionary.
 add_executable(pforth_standalone csrc/pf_main.c)
-target_link_libraries(pforth_standalone ${PROJECT_NAME}_lib_sd m)
+if(WIN32)
+	target_link_libraries(pforth_standalone ${PROJECT_NAME}_lib_sd)
+else()
+	target_link_libraries(pforth_standalone ${PROJECT_NAME}_lib_sd m)
+endif(WIN32)
 target_compile_definitions(pforth_standalone PRIVATE PF_STATIC_DIC)
 add_dependencies(pforth_standalone pforth_dic_header)
 
